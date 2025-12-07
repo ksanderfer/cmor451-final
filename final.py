@@ -115,11 +115,13 @@ def run_sim_policy1(max_time):
         time_past = 0
         num_over_30 = 0
 
-        while time < END_TIME or n > 0:
+        while time < END_TIME or min(n) > 0:
             if min(ta) <= get_min_dep(td)[0] and min(ta) <= END_TIME:
                 curr_arr = min(ta)
                 arr_idx = ta.index(curr_arr)
                 total_cost += calculate_cost(curr_arr - time, queues)
+                for i in (0,1,2):
+                    running_avg[i] += len(queues[i]) * (curr_dep - time)
                 time = curr_arr
 
                 server_available_flag = False
@@ -143,7 +145,7 @@ def run_sim_policy1(max_time):
                 else:
                     queues[arr_idx].append(time)
                 
-                running_avg[arr_idx] += max(n[arr_idx]-1, 0) * (curr_arr - time)
+                
                 
                 arrivals += 1
                 n[arr_idx] += 1
@@ -155,28 +157,27 @@ def run_sim_policy1(max_time):
                 dep_job = get_min_dep(td)[1][0]
                 dep_server = get_min_dep(td)[1][1]
                 total_cost += calculate_cost(curr_dep - time, queues)
+                for i in (0,1,2):
+                    running_avg[i] += len(queues[i]) * (curr_dep - time)
 
 
                 #Implement policy
                 server_cust_type[dep_server][dep_job] = 0
+                td[dep_server][dep_job] = np.inf
                 if queues[dep_job]:
                     if time - queues[dep_job].pop() > 30:
                         num_over_30 +=1
                     server_cust_type[dep_job][dep_server] = dep_job + 1
+                    td[dep_job][dep_server] = next_dep_time(dep_server)
                 elif queues[min(dep_job+1, 2)]:
                     if time - queues[min(dep_job+1, 2)].pop() > 30:
                         num_over_30 += 1 
                     server_cust_type[min(dep_job+1, 2)][dep_server] = dep_job + 1
+                    td[min(dep_job+1, 2)][dep_server] = next_dep_time(dep_server)
 
-                running_avg[dep_idx] += max(n[dep_idx]-1, 0) * (curr_dep - time)
+                
                 time = curr_dep
-                n[dep_idx] -= 1
                 departures += 1
-                if n[dep_idx] == 0:
-                    td[dep_idx] = np.inf
-                else:
-                    td[dep_idx] = time + next_dep_time(dep_idx)
-                departure_data.append(time)
 
             elif min(ta, td) > END_TIME and n > 0:
                 running_avg += max(n-1, 0) * (td - time)
