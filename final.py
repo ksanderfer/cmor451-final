@@ -36,8 +36,9 @@ np.random.seed(NP_SEED)
 def next_arr_time(queue_idx):
     return np.random.exponential(ARRIVAL_TIME_MEANS[queue_idx])
 
-def next_dep_time(service_idx):
-    return np.random.exponential(ARRIVAL_TIME_MEANS[service_idx])
+def next_dep_time(cust_type_idx):
+    return np.random.exponential(SERVICE_TIME_MEANS[cust_type_idx])
+
 
 def get_wait_cost(i):
     return WAITING_COSTS[i]
@@ -52,15 +53,16 @@ def calculate_cost(dt, queues):
             cost += get_wait_cost(q) * dt 
     return cost
 
-def get_min_dep(deps:list[list]):
-    min = np.inf
-    min_idx = (None, None)
-    for i in deps:
-        for j in i:
-            if j < min:
-                min = j
-                min_idx = (i,j) 
-    return (min, min_idx)
+def get_min_dep(deps):
+    min_time = np.inf
+    min_indices = (None, None)
+    for g, row in enumerate(deps):
+        for s, t_dep in enumerate(row):
+            if t_dep < min_time:
+                min_time = t_dep
+                min_indices = (g, s)
+    return min_time, min_indices
+
 
 results_avgtime = []
 results_avgnum = []
