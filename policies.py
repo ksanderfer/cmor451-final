@@ -1,4 +1,4 @@
-# Primary Policy
+# Weighted longest queue policy
 
 import numpy as np
 
@@ -108,7 +108,28 @@ STAFF_PER_EXPERIMENT = [
     [6, 4, 10]
 ]
 
-def run_policy_1(exp_num, run_length):
+
+def get_weighted_longest_queue(queues, server_type):
+    """Returns index of longest weighted queue"""
+    applicable_cust_types = get_applicable_cust_types(server_type)
+    ret_queue, cost = None, np.inf
+    for i in range(len(queues)):
+        if i in applicable_cust_types and queues[i]:
+            candidate_cost = len(queues[i]) * (3 - i)
+            if candidate_cost < cost:
+                ret_queue, cost = i, candidate_cost
+    # if ret_queue is None: 
+    #     raise RuntimeError(f"No weighted longest queue found, invalid queues: {queues} or server_type: {server_type}")
+
+    # Can be None if there is no queue to choose from
+    return ret_queue
+
+
+
+
+def run_experiment(policy_num, exp_num, run_length):
+    
+    assert policy_num in [1, 2]
 
     queue_lengths_over_time = []
 
@@ -149,7 +170,9 @@ def run_policy_1(exp_num, run_length):
         []
     ]
 
+    iters = 0
     while system_time < run_length:
+        iters += 1
 
         for queue_idx in range(len(queues)):
             historic_queue_lens[queue_idx].append(len(queues[queue_idx]))
@@ -183,6 +206,7 @@ def run_policy_1(exp_num, run_length):
             applicable_server_types = get_applicable_server_types(cust_type)
             server_is_found = False
 
+            # ------ ARRIVAL POLICY same for Policies 1 and 2 ------
             for server_type in applicable_server_types:
                 for server_idx in range(len(server_statuses[server_type])):
                     if server_statuses[server_type][server_idx] == 0:
@@ -224,15 +248,30 @@ def run_policy_1(exp_num, run_length):
             # try to pull next waiting customer, if any
             applicable_cust_types = get_applicable_cust_types(free_server_type)
 
-            for cust_type_idx in applicable_cust_types:
-                if queues[cust_type_idx]:
+            # -------- FOR POLICY 1 (Primary Policy) ----------- 
+            if policy_num == 1:
+                for cust_type_idx in applicable_cust_types:
+                    if queues[cust_type_idx]:
+                        arrival_time = queues[cust_type_idx].pop(0)
+                        if (system_time - arrival_time) > 0.5:  # 0.5 minutes = 30s
+                            num_waited_over_30s += 1
+                        new_cust_type = cust_type_idx + 1
+                        server_statuses[g][s] = new_cust_type
+                        departure_times[g][s] = system_time + next_service_time(new_cust_type)
+                        break
+            
+                
+            # -------- FOR POLICY 2 (Weighted Longest Queue Policy) ----------- 
+            if policy_num == 2:
+                cust_type_idx = get_weighted_longest_queue(queues, free_server_type)
+                if cust_type_idx is not None: 
                     arrival_time = queues[cust_type_idx].pop(0)
-                    if (system_time - arrival_time) > 0.5:  # 0.5 minutes = 30s
+                    if (system_time - arrival_time) > 0.5:
                         num_waited_over_30s += 1
                     new_cust_type = cust_type_idx + 1
                     server_statuses[g][s] = new_cust_type
                     departure_times[g][s] = system_time + next_service_time(new_cust_type)
-                    break
+
 
     # REPORT RESULTS 
     print(f"-------------------Results for experiment {exp_num}:----------------")
@@ -243,8 +282,10 @@ def run_policy_1(exp_num, run_length):
     frac_over_30s = num_waited_over_30s / num_departed
     print(f"Fraction of customers waiting over 30s: {frac_over_30s}")
 
+    print(f"ITERS: {iters}")
+
     for i, queue_len in enumerate(avg_queue_len, start=1):
         print(f"Average length of queue {i}: {queue_len}")
-    print()
+    
     
     return queue_lengths_over_time
