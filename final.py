@@ -54,6 +54,7 @@ def calculate_cost(dt, queues):
 
 def get_min_dep(deps:list[list]):
     min = np.inf
+    min_idx = (None, None)
     for i in deps:
         for j in i:
             if j < min:
@@ -74,7 +75,6 @@ num_itrs = 0
 def run_sim_policy1(max_time):
     for exp_num in (1,2,3,4):
 
-        num_itrs+=1
 
         total_cost = 0
 
@@ -111,9 +111,8 @@ def run_sim_policy1(max_time):
             [], # customer type 3
         ]
         running_avg = [0,0,0]
-        server_util = 0
-        time_past = 0
         num_over_30 = 0
+        revenue = 0
 
         while time < END_TIME or min(n) > 0:
             if min(ta) <= get_min_dep(td)[0] and min(ta) <= END_TIME:
@@ -121,13 +120,13 @@ def run_sim_policy1(max_time):
                 arr_idx = ta.index(curr_arr)
                 total_cost += calculate_cost(curr_arr - time, queues)
                 for i in (0,1,2):
-                    running_avg[i] += len(queues[i]) * (curr_dep - time)
+                    running_avg[i] += len(queues[i]) * (curr_arr - time)
                 time = curr_arr
 
                 server_available_flag = False
                 # Primary policy: check server type j first
                 if len(queues[arr_idx])==0:
-                    for j in range(server_cust_type[arr_idx]):
+                    for j in range(len(server_cust_type[arr_idx])):
                         if server_cust_type[arr_idx][j] == 0: #start serving
                             server_available_flag = True
                             server_cust_type[arr_idx][j] = arr_idx + 1
@@ -136,7 +135,7 @@ def run_sim_policy1(max_time):
 
                     if server_available_flag == False and arr_idx != 1:
                         # Try servr type j - 1
-                        for j in range(server_cust_type[arr_idx - 1]):
+                        for j in range(len(server_cust_type[arr_idx - 1])):
                             if server_cust_type[arr_idx - 1][j] == 0:
                                 server_cust_type[arr_idx - 1][j] = arr_idx + 1 
                                 td[arr_idx - 1][j] = next_dep_time(arr_idx) + time
@@ -178,93 +177,28 @@ def run_sim_policy1(max_time):
                 
                 time = curr_dep
                 departures += 1
+                revenue += get_revenue(dep_job, dep_server)
 
-            elif min(ta, td) > END_TIME and n > 0:
-                running_avg += max(n-1, 0) * (td - time)
-                if n > 0:
-                    server_util += 1 * (td - time)
-                time = td
-                n -= 1
+            elif min(ta) > END_TIME and get_min_dep(td)[0] > END_TIME:
+                for i in (0,1,2):
+                    running_avg[i] += len(queues[i]) * (END_TIME - time)
+                time = END_TIME
                 departures += 1
-                if n > 0:
-                    td = time + dep_time()
-                departure_data.append(time)
 
-            elif min(ta, td) > END_TIME and n == 0:
-                time_past = max(time - END_TIME, 0)
-                time = END_TIME + time_past
-
-        time_past = max(time - END_TIME, 0.0)
-        total_time = time 
-        avg_Lq = running_avg / total_time
-        util   = server_util / total_time
+        
 
         # Analyze Results:
-        #print(f"---Results for simulation {exp_num+1}---")
-        # Avg time in system
-        elapsed_time = 0
-        for i in range(len(departure_data)):
-            elapsed_time += departure_data[i] - arrival_data[i]
-        avg_time = elapsed_time / len(departure_data)
-        #print(f"Average time in system: {avg_time:.2f}")
+        
+        print(f"------------------Results for Experiment Number {exp_num}:--------------------")
+        profit = revenue - total_cost
+        avg_profit = profit / departures
+        print(f"Avg profit per customer: {avg_profit}")
+        
+        frac_wait_30 = num_over_30 / departures
+        print(f"Fraction of customers who wait more than 30s: {frac_wait_30} ")
+        
+        for avg in range(len(running_avg)):
+            print(f"Average length of queue {avg}: {running_avg[avg]}")
+        
 
-        results_avgtime.append(avg_time)
-
-        # Avg num in queue
-        #print(f"Average number waiting in line: {avg_Lq:.2f}")
-        results_avgnum.append(avg_Lq)
-
-        # Number served per day
-        #print(f"Number of customers served: {len(arrival_data)}")
-        results_numserved.append(len(arrival_data))
-
-        # Server utilization
-        #print(f"Server utilization: {util:.2f}")
-        results_util.append(util)
-
-        # Last departure time
-        #print(f"Last departure time: {departure_data[len(departure_data)-1]:.2f}")
-        results_lastdepart.append(departure_data[len(departure_data)-1])
-
-        #print("---------------------------------------------")
-
-        if num_itrs < MIN_PILOT:
-            continue
-
-        all_sub1 = True
-        intervals = []
-        halflengths = []
-        errors = []
-        points = []
-
-        alpha_prime = ALPHA  
-        conf = 1 - alpha_prime
-
-        for result in [results_avgtime, results_avgnum, results_numserved, results_util, results_lastdepart]:
-            n = len(result)
-            xbar = float(np.mean(result))
-            s    = float(np.std(result, ddof=1))
-            tcrit = t.ppf(1 - alpha_prime/2, df=n-1)
-            se = s / sqrt(n)
-            h  = tcrit * se
-            ci = (xbar - h, xbar + h)
-
-            intervals.append(ci)
-            halflengths.append(h)
-
-            # relative error check (use abs mean)
-            relerr = h / max(abs(xbar), 1e-12)
-            errors.append(relerr)
-            if relerr > TARGET_REL:
-                all_sub1 = False
-
-        if all_sub1:
-            print(f"Number of iterations: {num_itrs}")
-            print("CIs (95% per metric):")
-            for ci in intervals:
-                print(ci)
-                print("Point: ", (ci[1]+ci[0])/2)
-            print("Half-widths:", halflengths)
-            print("Errors: ", errors)
-            break
-
+run_sim_policy1(100)
