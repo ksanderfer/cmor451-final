@@ -6,9 +6,9 @@ def next_interarrival(cust_type):
     if cust_type == 1:
         return np.random.exponential(1)
     elif cust_type == 2: 
-        return np.random.exponential(0.5)
+        return np.random.exponential(1/0.5)
     elif cust_type == 3:
-        return np.random.exponential(0.8)
+        return np.random.exponential(1/0.8)
     else:
         raise RuntimeError(f"Invalid customer type in next_interarrival: {cust_type}")
     
@@ -141,10 +141,18 @@ def run_policy_1(exp_num, run_length):
     system_time         = 0.0
     num_waited_over_30s = 0
     avg_queue_len       = [0.0, 0.0, 0.0]
+    historic_queue_lens = [
+        [],
+        [],
+        []
+    ]
 
     while system_time < run_length:
 
-        queue_lengths_over_time.append((system_time, [len(queues[0]), len(queues[1]), len(queues[2])]))
+        for queue_idx in range(len(queues)):
+            historic_queue_lens[queue_idx].append(len(queues[queue_idx]))
+
+        queue_lengths_over_time.append((system_time, [np.mean(historic_queue_lens[0]), np.mean(historic_queue_lens[1]), np.mean(historic_queue_lens[2])]))
 
 
         next_arrival_time = min(next_arrivals)
