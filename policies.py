@@ -112,11 +112,11 @@ STAFF_PER_EXPERIMENT = [
 def get_weighted_longest_queue(queues, server_type):
     """Returns index of longest weighted queue"""
     applicable_cust_types = get_applicable_cust_types(server_type)
-    ret_queue, cost = None, np.inf
+    ret_queue, cost = None, 0
     for i in range(len(queues)):
         if i in applicable_cust_types and queues[i]:
             candidate_cost = len(queues[i]) * (3 - i)
-            if candidate_cost < cost:
+            if candidate_cost > cost:
                 ret_queue, cost = i, candidate_cost
     # if ret_queue is None: 
     #     raise RuntimeError(f"No weighted longest queue found, invalid queues: {queues} or server_type: {server_type}")
@@ -174,11 +174,13 @@ def run_experiment(policy_num, exp_num, run_length):
     while system_time < run_length:
         iters += 1
 
+        
         for queue_idx in range(len(queues)):
             historic_queue_lens[queue_idx].append(len(queues[queue_idx]))
 
-        queue_lengths_over_time.append((system_time, [np.mean(historic_queue_lens[0]), np.mean(historic_queue_lens[1]), np.mean(historic_queue_lens[2])]))
-
+    
+       
+        queue_lengths_over_time.append((system_time, [len(queues[0]), len(queues[1]), len(queues[2])]))
 
         next_arrival_time = min(next_arrivals)
         next_departure_time = find_soonest_departure_time(departure_times)
@@ -274,7 +276,7 @@ def run_experiment(policy_num, exp_num, run_length):
 
 
     # REPORT RESULTS 
-    print(f"-------------------Results for experiment {exp_num}:----------------")
+    print(f"------------------- Policy {policy_num}, Results for experiment {exp_num}:----------------")
 
     profit_per_customer = profit / num_departed
     print(f"Average profit per customer: {profit_per_customer}")
@@ -288,4 +290,4 @@ def run_experiment(policy_num, exp_num, run_length):
         print(f"Average length of queue {i}: {queue_len}")
     
     
-    return queue_lengths_over_time
+    return queue_lengths_over_time, profit_per_customer, frac_over_30s, avg_queue_len
