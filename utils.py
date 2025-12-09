@@ -95,3 +95,98 @@ def plot_queue_lengths(queue_log, warmup_time=0.0, exp_num="", policy_num=""):
 
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+def time_avg_from_queue_log(queue_log, warmup_time=0.0):
+    if not queue_log:
+        return [], [], [], []
+
+    #  sorted by time
+    queue_log = sorted(queue_log, key=lambda x: x[0])
+
+    area = np.zeros(3) 
+    times = []
+    avg_q1 = []
+    avg_q2 = []
+    avg_q3 = []
+
+    t_prev, q_prev = queue_log[0]
+    q_prev = np.asarray(q_prev, float)
+
+    for t, q in queue_log[1:]:
+        q = np.asarray(q, float)
+        dt = t - t_prev
+        if dt < 0:
+            raise RuntimeError("Non-monotone times in queue_log")
+
+        area += q_prev * dt
+
+        t_prev = t
+        q_prev = q
+
+        if t > 0:
+            avg = area / t
+            if t >= warmup_time:
+                times.append(t)
+                avg_q1.append(avg[0])
+                avg_q2.append(avg[1])
+                avg_q3.append(avg[2])
+
+    return times, avg_q1, avg_q2, avg_q3
+
+
+def plot_time_avg_queue(queue_log, warmup_time=0.0, exp_num=None, policy_num=None):
+    times, q1, q2, q3 = time_avg_from_queue_log(queue_log, warmup_time=warmup_time)
+
+    plt.figure()
+    plt.plot(times, q1, label="Queue 1")
+    plt.plot(times, q2, label="Queue 2")
+    plt.plot(times, q3, label="Queue 3")
+
+    plt.xlabel("Time")
+    plt.ylabel("Time-average queue length")
+    title = "Time-average queue length"
+    if policy_num is not None and exp_num is not None:
+        title += f" (Policy {policy_num}, Exp {exp_num})"
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+from scipy.stats import t
+import numpy as np
+
+def ci_1d(samples, alpha=0.05):
+    samples = np.asarray(samples, dtype=float)
+    n = len(samples)
+    mean = samples.mean()
+
+    if n < 2:
+        return {
+            "mean": mean,
+            "ci": (mean, mean),
+            "halfwidth": 0.0,
+            "rel_halfwidth": 0.0,
+        }
+
+    s = samples.std(ddof=1)
+    if s == 0:
+        return {
+            "mean": mean,
+            "ci": (mean, mean),
+            "halfwidth": 0.0,
+            "rel_halfwidth": 0.0,
+        }
+
+    tcrit = t.ppf(1 - alpha/2, n - 1)
+    hw = tcrit * s / np.sqrt(n)
+    rel_hw = 0.0 if mean == 0 else hw / abs(mean)
+
+    return {
+        "mean": mean,
+        "ci": (mean - hw, mean + hw),
+        "halfwidth": hw,
+        "rel_halfwidth": rel_hw,
+    }

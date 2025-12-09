@@ -164,9 +164,10 @@ def choose_queue_policy3(queues, applicable_cust_types, server_type, system_time
     return max(candidates, key=lambda c: c[2] / c[3] * np.log(len(queues[c[0]])))[0]
 
 
-def run_experiment(policy_num, exp_num, run_length):
+def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
     
     assert policy_num in [1, 2, 3] # 1 = primary; 2 = weighted; 3 = profit max/wait min
+    assert warmup_period < run_length
 
     queue_lengths_over_time = []
 
@@ -208,16 +209,21 @@ def run_experiment(policy_num, exp_num, run_length):
     ]
 
     iters = 0
+    past_warmup = False
     while system_time < run_length:
+        
         iters += 1
 
+        if system_time >= warmup_period:
+            past_warmup = True
         
-        for queue_idx in range(len(queues)):
-            historic_queue_lens[queue_idx].append(len(queues[queue_idx]))
+        if past_warmup:
+            for queue_idx in range(len(queues)):
+                historic_queue_lens[queue_idx].append(len(queues[queue_idx]))
 
     
        
-        queue_lengths_over_time.append((system_time, [len(queues[0]), len(queues[1]), len(queues[2])]))
+            queue_lengths_over_time.append((system_time, [len(queues[0]), len(queues[1]), len(queues[2])]))
 
         next_arrival_time = min(next_arrivals)
         next_departure_time = find_soonest_departure_time(departure_times)
@@ -230,8 +236,9 @@ def run_experiment(policy_num, exp_num, run_length):
         system_time = new_time
 
         # accumulate waiting cost and queue stats
-        profit -= waiting_cost(dt, queues)
-        increment_avg_queue_len(dt, run_length, queues, avg_queue_len)
+        if past_warmup:
+            profit -= waiting_cost(dt, queues)
+            increment_avg_queue_len(dt, run_length, queues, avg_queue_len)
         
 
         if system_time >= run_length:
@@ -275,10 +282,11 @@ def run_experiment(policy_num, exp_num, run_length):
             cust_type = server_statuses[g][s]
             if cust_type == 0:
                 raise RuntimeError("Departure from idle server encountered.")
-            num_departed += 1
+            if past_warmup:
+                num_departed += 1
 
-            # gain revenue
-            profit += revenue(cust_type, free_server_type)
+                # gain revenue
+                profit += revenue(cust_type, free_server_type)
 
             # server becomes idle
             server_statuses[g][s] = 0
@@ -292,7 +300,7 @@ def run_experiment(policy_num, exp_num, run_length):
                 for cust_type_idx in applicable_cust_types:
                     if queues[cust_type_idx]:
                         arrival_time = queues[cust_type_idx].pop(0)
-                        if (system_time - arrival_time) > 0.5:  # 0.5 minutes = 30s
+                        if (system_time - arrival_time) > 0.5 and past_warmup:  # 0.5 minutes = 30s
                             num_waited_over_30s += 1
                         new_cust_type = cust_type_idx + 1
                         server_statuses[g][s] = new_cust_type
@@ -305,7 +313,7 @@ def run_experiment(policy_num, exp_num, run_length):
                 cust_type_idx = get_weighted_longest_queue(queues, free_server_type)
                 if cust_type_idx is not None: 
                     arrival_time = queues[cust_type_idx].pop(0)
-                    if (system_time - arrival_time) > 0.5:
+                    if (system_time - arrival_time) > 0.5 and past_warmup:
                         num_waited_over_30s += 1
                     new_cust_type = cust_type_idx + 1
                     server_statuses[g][s] = new_cust_type
@@ -324,7 +332,7 @@ def run_experiment(policy_num, exp_num, run_length):
                 )
                 if q_idx is not None:
                     arrival_time = queues[q_idx].pop(0)  # FIFO
-                    if (system_time - arrival_time) > 0.5:
+                    if (system_time - arrival_time) > 0.5 and past_warmup:
                         num_waited_over_30s += 1
                     new_cust_type = q_idx + 1
                     server_statuses[g][s] = new_cust_type
