@@ -200,7 +200,8 @@ def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
     profit              = 0.0
     num_departed        = 0
     system_time         = 0.0
-    num_waited_over_30s = 0
+    num_waited_over_30s = [0, 0, 0]
+    tot_served          = [0, 0, 0]
     avg_queue_len       = [0.0, 0.0, 0.0]
     historic_queue_lens = [
         [],
@@ -301,7 +302,8 @@ def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
                     if queues[cust_type_idx]:
                         arrival_time = queues[cust_type_idx].pop(0)
                         if (system_time - arrival_time) > 0.5 and past_warmup:  # 0.5 minutes = 30s
-                            num_waited_over_30s += 1
+                            num_waited_over_30s[cust_type_idx] += 1
+                        tot_served[cust_type_idx] += 1
                         new_cust_type = cust_type_idx + 1
                         server_statuses[g][s] = new_cust_type
                         departure_times[g][s] = system_time + next_service_time(new_cust_type)
@@ -314,7 +316,8 @@ def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
                 if cust_type_idx is not None: 
                     arrival_time = queues[cust_type_idx].pop(0)
                     if (system_time - arrival_time) > 0.5 and past_warmup:
-                        num_waited_over_30s += 1
+                        num_waited_over_30s[cust_type_idx] += 1
+                    tot_served[cust_type_idx] += 1
                     new_cust_type = cust_type_idx + 1
                     server_statuses[g][s] = new_cust_type
                     departure_times[g][s] = system_time + next_service_time(new_cust_type)
@@ -333,7 +336,8 @@ def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
                 if q_idx is not None:
                     arrival_time = queues[q_idx].pop(0)  # FIFO
                     if (system_time - arrival_time) > 0.5 and past_warmup:
-                        num_waited_over_30s += 1
+                        num_waited_over_30s[cust_type_idx] += 1
+                    tot_served[cust_type_idx] += 1
                     new_cust_type = q_idx + 1
                     server_statuses[g][s] = new_cust_type
                     departure_times[g][s] = system_time + next_service_time(new_cust_type)
@@ -350,13 +354,16 @@ def run_experiment(policy_num, exp_num, run_length, warmup_period=0):
     profit_per_customer = profit / num_departed
     print(f"Average profit per customer: {profit_per_customer}")
 
-    frac_over_30s = num_waited_over_30s / num_departed
+    frac_over_30s = [0, 0, 0]
+    for i in range(len(num_waited_over_30s)):
+        frac_over_30s[i] = num_waited_over_30s[i] / tot_served[i]
     print(f"Fraction of customers waiting over 30s: {frac_over_30s}")
 
     print(f"ITERS: {iters}")
 
     for i, queue_len in enumerate(avg_queue_len, start=1):
         print(f"Average length of queue {i}: {queue_len}")
+        print(f"Average num waited over 30s in queue {i}: {num_waited_over_30s[i-1]}")
     
     
     return queue_lengths_over_time, profit_per_customer, frac_over_30s, avg_queue_len

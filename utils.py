@@ -21,10 +21,6 @@ def summarize_queue_log(queue_log, warmup_time):
 
 
 def ci_from_queue_logs(queue_logs, warmup_time, alpha=0.05, rel_floor=1e-12):
-    import math
-    import numpy as np
-    from scipy.stats import t as student_t
-
     n_policies = len(queue_logs)
     results = {}
 
