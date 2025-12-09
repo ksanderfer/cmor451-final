@@ -125,11 +125,48 @@ def get_weighted_longest_queue(queues, server_type):
     return ret_queue
 
 
+def mean_service_time(cust_type):
+    if cust_type == 1:
+        return 5.0
+    elif cust_type == 2:
+        return 8.0
+    elif cust_type == 3:
+        return 12.0
+    else:
+        raise RuntimeError(f"Invalid cust_type in mean_service_time: {cust_type}")
+
+def waiting_cost_rate(cust_type):
+    # type 1 -> 3, type 2 -> 2, type 3 -> 1
+    return 4 - cust_type
+
+def choose_queue_policy3(queues, applicable_cust_types, server_type, system_time,
+                         threshold=1/3):
+    candidates = []
+    for q_idx in applicable_cust_types:
+        if queues[q_idx]:  
+            arrival_time = queues[q_idx][0]
+            wait = system_time - arrival_time
+            cust_type = q_idx + 1
+            rev = revenue(cust_type, server_type)
+            svc = mean_service_time(cust_type)
+            wcost = waiting_cost_rate(cust_type)
+            candidates.append((q_idx, wait, rev, svc, wcost))
+
+    if not candidates:
+        return None
+
+    risky = [c for c in candidates if c[1] >= threshold]
+    if risky:
+        # maximize (waiting_cost_rate * wait)
+        return max(risky, key=lambda c: c[4] * c[1] * np.log(len(queues[c[0]])))[0]
+
+    # no one over threshold -> maximize profit rate
+    return max(candidates, key=lambda c: c[2] / c[3] * np.log(len(queues[c[0]])))[0]
 
 
 def run_experiment(policy_num, exp_num, run_length):
     
-    assert policy_num in [1, 2]
+    assert policy_num in [1, 2, 3] # 1 = primary; 2 = weighted; 3 = profit max/wait min
 
     queue_lengths_over_time = []
 
@@ -273,6 +310,30 @@ def run_experiment(policy_num, exp_num, run_length):
                     new_cust_type = cust_type_idx + 1
                     server_statuses[g][s] = new_cust_type
                     departure_times[g][s] = system_time + next_service_time(new_cust_type)
+
+            # -------- FOR POLICY 3 (Profit Max/Wait Min Policy) ----------- 
+            # first, check if any applicable queues have someone waiting for >25s
+            # if yes, serve from that queue (longest line if multiple)
+            # if no, serve the highest-revenue customer among applicable queues
+            if policy_num == 3:
+                q_idx = choose_queue_policy3(
+                    queues,
+                    applicable_cust_types,
+                    free_server_type,
+                    system_time
+                )
+                if q_idx is not None:
+                    arrival_time = queues[q_idx].pop(0)  # FIFO
+                    if (system_time - arrival_time) > 0.5:
+                        num_waited_over_30s += 1
+                    new_cust_type = q_idx + 1
+                    server_statuses[g][s] = new_cust_type
+                    departure_times[g][s] = system_time + next_service_time(new_cust_type)
+                # else: server stays idle
+
+
+                
+
 
 
     # REPORT RESULTS 
