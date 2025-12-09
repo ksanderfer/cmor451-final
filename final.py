@@ -15,9 +15,9 @@ if __name__ == "__main__":
     warmup_time = 4_000
 
     # Run all experiments (100,000 hours, 50 replications)
-    results = run_experiments(policies, experiments, run_time=10_000, n_reps=5, warmup_time=warmup_time)
+    results = run_experiments(policies, exp_num, run_time, n_reps, warmup_time)
 
     # Confidence Intervals
     alpha = 0.05 
-    print_confidence_intervals(policies, experiments, results, alpha)
+    print_confidence_intervals(policies, exp_num, results, alpha)
 
